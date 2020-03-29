@@ -156,8 +156,6 @@ Node * get_split(
 		for (row = 0; row < numRows; row++){
 			currSplitValue = dataset[row * numCols + feature];
 
-			// printf("\t\tTesting split value %lf on %d rows\n", currSplitValue, numRows);
-
 			// Test this split:
 			nLeft = 0;
 			nRight = 0;
@@ -176,7 +174,6 @@ Node * get_split(
 			// Use the feature map to create arrays for labels
 			// placed in the left and right groups
 
-			// printf("\t\tMapping... Num in left %d | Num in right %d\n", nLeft, nRight);
 			leftLabels = (int *) calloc(nLeft, sizeof(int));
 			rightLabels = (int *) calloc(nRight, sizeof(int));
 
@@ -201,13 +198,7 @@ Node * get_split(
 			}
 
 			// Calculate the gini index
-
-			// printf("\t\tCalculating gini score...\n");
 			score = gini_index_2(nLeft, leftLabels, nRight, rightLabels, numClasses);
-
-			// score = 15;
-
-			// printf("\t\tGini is %f\n", score);
 
 			// If it is less than the last gini index,
 			// set the currentSplitValue as the bestSplitValue
@@ -228,21 +219,13 @@ Node * get_split(
 
 				bestLeftLabels = leftLabels;
 				bestRightLabels = rightLabels;
+
+
 				leftLabels = NULL;
 				rightLabels = NULL;
-				// free(leftLabels);
-				// free(rightLabels);
-
-			}
-			// else {
-			// 	free(leftLabels);
-			// 	free(rightLabels);
-			// }
-
-		}
-
-
-	}
+			} // END IF
+		} // End for (on rows)
+	} // End for (on features)
 
 	printf("Best feature index at depth %d is: %d\n", currentDepth, bestFeatureIndex);
 
@@ -254,15 +237,15 @@ Node * get_split(
 	// is 0, then this node becomes a leaf node
 
 	if (nLeft == 0 || nRight == 0){
-		printf("First if\n");
+		// printf("First if\n");
 		Node *leaf = (Node *) malloc(sizeof(Node));
 		int majorityClass;
 
 		if (nLeft){
-			majorityClass = majority_class(nLeft, bestLeftLabels, numClasses);
+			majorityClass = majority_class(bestNLeft, bestLeftLabels, numClasses);
 		}
 		else {
-			majorityClass = majority_class(nRight, bestRightLabels, numClasses);
+			majorityClass = majority_class(bestNRight, bestRightLabels, numClasses);
 		}
 
 		leaf->isLeaf = 1;
@@ -285,8 +268,8 @@ Node * get_split(
 		Node *leafRight = (Node *) malloc(sizeof(Node));
 
 
-		int majorityLeft = majority_class(nLeft, bestLeftLabels, numClasses);
-		int majorityRIght = majority_class(nRight, bestRightLabels, numClasses);
+		int majorityLeft = majority_class(bestNLeft, bestLeftLabels, numClasses);
+		int majorityRIght = majority_class(bestNRight, bestRightLabels, numClasses);
 
 		// These 2 leaf nodes could be merged into one... TODO
 
@@ -302,7 +285,7 @@ Node * get_split(
 		return lastParent;
 	}
 
-	printf("Else\n");
+	// printf("Else\n");
 	// If we are not at max depth and we are not a leaf:
 
 	Node *current = (Node *) malloc(sizeof(Node));
