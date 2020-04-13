@@ -842,7 +842,15 @@ int split_dataset(
 
 
 
-
+/*
+ * Steps to take when paralelizin:
+ *   1. Determin how much trees each node should train
+ *   	- each node will probably train > 1
+ *   	- node 0 should train the leftover number of nodes
+ *   2. Send the dataset to each node (include the dimensions of the matrix)
+ *   3. Send 
+ *
+ */
 int main(int argc, char *argv[]){
 
 	long int numFeatures;
@@ -945,19 +953,6 @@ int main(int argc, char *argv[]){
 		printf("%d\n", trainLabels[i]);
 	}
 
-	// printf("Labels after shuffle\n");
-	// int hg;
-	// for (hg = 0; hg < numInstances; hg++){
-	// 	printf("%d\n", labels[hg]);
-	// }
-
-	// int k;
-	// for (k = 0; k < 3; k++){
-	// 	print_dataset_row(numInstances, numFeatures, dataset, k);
-	// 	printf("%d\n", labels[k]);
-	// 	labels[k];
-	// }
-
 
 	///////////////////////////
 	// GET DATASET SUBSAMPLE //
@@ -995,12 +990,6 @@ int main(int argc, char *argv[]){
 	);
 
 	print_tree(root, 0);
-
-	// int i;
-	// for (i = 0; i < 3; i++){
-	// 	print_dataset_row(numInstances, numFeatures, datasetSample, i);
-	// 	printf("%d\n", sampleLabels[i]);
-	// }
 
 	// Free memory
 
