@@ -98,7 +98,20 @@ Node * get_split(
 		int **selectedFeatureColumns,
 		int currentDepth){
 
-	printf("Entered depth %d\n", currentDepth);
+	if (numRows < 5){
+		// Too few instances, return the majority class
+		Node *leaf = (Node *) malloc(sizeof(Node));
+		int majorityClass;
+
+		majorityClass = majority_class(numRows, labels, numClasses);
+
+		leaf->isLeaf = 1;
+		leaf->label = majorityClass;
+
+		return leaf;
+	}
+
+	// printf("Entered depth %d\n", currentDepth);
 	
 	int *featureColPtr = *selectedFeatureColumns;
 	float gini = 10000.0; // Big enough number
@@ -164,17 +177,17 @@ Node * get_split(
 			for (innerRow = 0; innerRow < numRows; innerRow++){
 				if (splitMap[innerRow] == 0){
 					leftLabels[lCount++] = labels[innerRow];
-					if (labels[innerRow] > 1){
-						printf("Label at %d going left: %d\n", innerRow, leftLabels[lCount - 1]);
+					// if (labels[innerRow] > 1){
+					// 	printf("Label at %d going left: %d\n", innerRow, leftLabels[lCount - 1]);
 						
-					}
+					// }
 				}
 				else {
 					rightLabels[rCount++] = labels[innerRow];
-					if (labels[innerRow] > 1){
-						printf("Label at %d going right: %d\n", innerRow, rightLabels[rCount - 1]);
+					// if (labels[innerRow] > 1){
+					// 	printf("Label at %d going right: %d\n", innerRow, rightLabels[rCount - 1]);
 						
-					}
+					// }
 				}
 			}
 
@@ -208,7 +221,7 @@ Node * get_split(
 		} // End for (on rows)
 	} // End for (on features)
 
-	printf("Best feature index at depth %d is: %d\n", currentDepth, bestFeatureIndex);
+	// printf("Best feature index at depth %d is: %d\n", currentDepth, bestFeatureIndex);
 
 	// If there are NO FEATURES AVAILABLE
 	if (bestFeatureIndex == -1){
@@ -290,28 +303,120 @@ Node * get_split(
 	current->value = bestSplitValue;
 	current->isLeaf = 0;
 
+	///////////////////////////////////////////
+	// SPLIT THE DATASET INTO LEFT AND RIGHT //
+	///////////////////////////////////////////
+
+	// TODO: NESTO OVDE NE VALJA
+
+	// *Could be done earlier, in the big for loop
+
+	double *leftSplitDataset;
+	double *rightSplitDataset;
+	int *leftSplitLabels;
+	int *rightSplitLabels;
+	int numInLeftDataset = 0;
+	int numInRightDataset = 0;
+
+	// 0 = goes left
+	// 1 = goes right
+	int leftRightMap[numRows];
+	int i;
+	for (i = 0; i < numRows; i++){
+		if (dataset[i * numCols + current->colIndex] <= current->value){
+			// Goes left...
+			leftRightMap[i] = 0;
+			numInLeftDataset++;
+		}
+		else {
+			// Goes right...
+			leftRightMap[i] = 1;
+			numInRightDataset++;
+		}
+	}
+
+	leftSplitDataset = (double *) malloc(numInLeftDataset * numCols * sizeof(double));
+	rightSplitDataset = (double *) malloc(numInRightDataset * numCols * sizeof(double));
+	leftSplitLabels = (int *) malloc(numInLeftDataset * sizeof(int));
+	rightSplitLabels = (int *) malloc(numInRightDataset * sizeof(int));
+
+
+	int leftFillCount = 0;
+	int rightFillCount = 0;
+	for (i = 0; i < numRows; i++){
+		int valInd;
+		if (leftRightMap[i] == 0){
+			for (valInd = 0; valInd < numCols; valInd++){
+				leftSplitDataset[leftFillCount * numCols + valInd] = 
+					dataset[i * numCols + valInd];
+			}
+			// TODO: Are labels ok?
+			leftSplitLabels[leftFillCount] = labels[i];
+			leftFillCount++;
+		}
+		else {
+			for (valInd = 0; valInd < numCols; valInd++){
+				rightSplitDataset[rightFillCount * numCols + valInd] =
+					dataset[i * numCols + valInd];
+			}
+			rightSplitLabels[rightFillCount] = labels[i];
+			rightFillCount++;
+		}
+	}
+
 	Node *leftChild = get_split(
-		numRows,
+		numInLeftDataset,
 		numCols,
-		dataset,
-		labels,
+		leftSplitDataset,
+		leftSplitLabels,
 		numClasses,
 		numSelectedFeatureColumns,
 		selectedFeatureColumns,
 		currentDepth - 1);
 
 	Node *rightChild = get_split(
-		numRows,
+		numInRightDataset,
 		numCols,
-		dataset,
-		labels,
+		rightSplitDataset,
+		rightSplitLabels,
 		numClasses,
 		numSelectedFeatureColumns,
 		selectedFeatureColumns,
 		currentDepth - 1);
 
+	////////////////////////
+	// WITH SPLITTING END //
+	////////////////////////
+
+	// Node *leftChild = get_split(
+	// 	numRows,
+	// 	numCols,
+	// 	dataset,
+	// 	labels,
+	// 	numClasses,
+	// 	numSelectedFeatureColumns,
+	// 	selectedFeatureColumns,
+	// 	currentDepth - 1);
+
+	// Node *rightChild = get_split(
+	// 	numRows,
+	// 	numCols,
+	// 	dataset,
+	// 	labels,
+	// 	numClasses,
+	// 	numSelectedFeatureColumns,
+	// 	selectedFeatureColumns,
+	// 	currentDepth - 1);
+
+
 	current->left = leftChild;
 	current->right = rightChild;
+
+	// free(leftSplitDataset);
+	// free(leftSplitLabels);
+
+	// free(rightSplitDataset);
+	// free(rightSplitLabels);
 
 	return current;
 
@@ -569,8 +674,8 @@ int get_dataset_sample(
 
 void shuffle_dataset(int numInstances, long int numCols, double **dataset, int **labels){
 
-	printf("Number of rows %d\n", numInstances);
-	printf("Number of columns %ld\n", numCols);
+	// printf("Number of rows %d\n", numInstances);
+	// printf("Number of columns %ld\n", numCols);
 
 	int *lblPointer = *labels;
 
@@ -673,7 +778,7 @@ float gini_index(int nLeft, int *leftLabels, int nRight, int *rightLabels, int n
 			p = count / nLeft;
 			score += (p * p);
 		}
-		printf("\t\tScore LEFT: %f\n", score);
+		// printf("\t\tScore LEFT: %f\n", score);
 		// Update the gini index for the left side of the split
 		gini += ((1.0 - score) * (nLeft / totalNumInstances));
 	}
@@ -700,7 +805,7 @@ float gini_index(int nLeft, int *leftLabels, int nRight, int *rightLabels, int n
 			p = count / nRight;
 			score += (p * p);
 		}
-		printf("\t\tScore RIGHT: %f\n", score);
+		// printf("\t\tScore RIGHT: %f\n", score);
 		// Update the gini index for the right side of the split
 		gini += ((1.0 - score) * (nRight / totalNumInstances));
 	}
@@ -882,11 +987,113 @@ float validate_tree(
 
 	}
 
-	printf("\nNumber of correct %d", numCorrect);
-
 	float accuracy = ((float) numCorrect) / ((float) numRows);
 
 	return accuracy;
+
+}
+
+
+/*
+ *	Gives predictions to every instance in the dataset.
+ *	Returns an array of predictions.
+ */
+int * predict(
+	int numRows, 
+	int numCols, 
+	double *dataset, 
+	Node *root){
+
+	int *predictions;
+
+	predictions = (int *) malloc(numRows * sizeof(int));
+
+	Node *currNode;
+
+	double observedValue;
+
+	int i;
+	for (i = 0; i < numRows; i++){
+
+		currNode = root;
+
+		while (currNode->isLeaf == 0){
+
+			observedValue = dataset[i * numCols + currNode->colIndex];
+
+			if (observedValue <= currNode->value){
+				// Go left in the tree
+				currNode = currNode->left;
+			}
+			else {
+				// Go right in the tree
+				currNode = currNode->right;
+			}
+
+		}
+
+		predictions[i] = currNode->label;
+
+	}
+
+	return predictions;
+
+}
+
+/*
+ *	Label the instance based on the
+ *	majority vote.
+ */
+int * get_majority_vote(
+	int numTrees,
+	int numInstances,
+	int *matrix,
+	int numClasses){
+
+	int *voteResults = (int *) calloc(numInstances, sizeof(int));
+
+	int vote;
+	int maxVote;
+	int votes[numClasses];
+
+	int treeInd;
+	int instance;
+	for (instance = 0; instance < numInstances; instance++){
+		for (treeInd = 0; treeInd < numTrees; treeInd++){
+			vote = matrix[treeInd * numInstances + instance];
+			votes[vote]++;
+		}
+
+		maxVote = 0;
+		for (int i = 0; i < numClasses; i++){
+			if (votes[i] > maxVote){
+				maxVote = i;
+			}
+		}
+
+		voteResults[instance] = maxVote;
+
+	}
+
+	return voteResults;
+
+}
+
+float get_accuracy(int n, int *labels, int *predictions){
+
+	int numCorrect;
+
+	int i;
+	for (i = 0; i < n; i++){
+
+		printf("%d == %d!\n", labels[i], predictions[i]);
+		fflush(stdout);
+		if (labels[i] == predictions[i]){
+			numCorrect++;
+		}
+	}
+
+	return (((float) numCorrect) / ((float) n));
 
 }
 
@@ -1283,7 +1490,7 @@ int main(int argc, char *argv[]) {
 	// SUBSAMPLE DATASET //
 	///////////////////////
 
-	srand(myRank);
+	srand(time(NULL) * myRank);
 
 	double *datasetSample;
 	int *sampleLabels;
@@ -1293,7 +1500,7 @@ int main(int argc, char *argv[]) {
 		numCols, 
 		trainSet, 
 		trainLabels, 
-		0.8, 
+		0.7, 
 		&datasetSample, 
 		&sampleLabels
 	);
@@ -1306,7 +1513,7 @@ int main(int argc, char *argv[]) {
 
 	// The master will have at most this many trees,
 	// if not less
-	Node *roots[numTreesPerWorker];
+	Node *trees[numTreesPerWorker];
 
 	int treesToTrain;
 	if (myRank == 0){
@@ -1321,7 +1528,7 @@ int main(int argc, char *argv[]) {
 	int treeInd;
 	for (treeInd = 0; treeInd < treesToTrain; treeInd++){
 
-		roots[treeInd] = create_tree(
+		trees[treeInd] = create_tree(
 			sampleSize,
 			numCols,
 			datasetSample,
@@ -1331,7 +1538,29 @@ int main(int argc, char *argv[]) {
 			numFeaturesToSample
 		);
 		printf("\n\n>>>%d trained #%d tree\n\n", myRank, treeInd);
+		// print_tree(trees[treeInd], 0);
 		fflush(stdout);
+	}
+
+	/////////////////////
+	// GET PREDICTIONS //
+	/////////////////////
+
+	int *localPredictionMatrix = (int *) malloc(treesToTrain * numValidation * sizeof(int));
+
+	int datapointIndex;
+	for (treeInd = 0; treeInd < treesToTrain; treeInd++){
+		int *preds = predict(
+			numValidation,
+			numCols,
+			validationSet,
+			trees[treeInd]);
+
+		for (datapointIndex = 0; datapointIndex < numValidation; datapointIndex++){
+			// Possible Error? Maybe copy the memory location
+			localPredictionMatrix[treeInd * numValidation + datapointIndex] = 
+				preds[datapointIndex];
+		}
 	}
 
 
@@ -1339,31 +1568,100 @@ int main(int argc, char *argv[]) {
 	// // ACCURACY REPORT //
 	// /////////////////////
 
-	// if (myRank == 0){
-	// 	// Create prediction matrix (numTrees * numValidation)
+	if (myRank == 0){
+		// Create prediction matrix (numTrees * numValidation)
 
-	// 	// Add my predictions to the matrix
+		int *predictionMatrix = (int *) malloc(numTrees * numValidation * sizeof(int));
 
-	// 	// Accept predictions of workers
+		// Add my predictions to the matrix
 
-	// 	// Calculate accuracy
+		for (treeInd = 0; treeInd < treesToTrain; treeInd++){
+			for (datapointIndex = 0; datapointIndex < numValidation; datapointIndex++){
+				// Possible error?
+				predictionMatrix[treeInd * numValidation + datapointIndex] =
+					localPredictionMatrix[treeInd * numValidation + datapointIndex];
+			}
+		}
 
-	// }
-	// else {
-	// 	// Create prediction matric (numTreesPerWorker * numValidation)
+		// Accept predictions of workers
 
-	// 	// Fill out predictions
+		int *incomingPredictions = (int *) malloc(numTreesPerWorker * numValidation * sizeof(int));
 
-	// 	// Send predictions to the master
+		int sizeOfIncomingPrediction = numTreesPerWorker * numValidation;
+
+		// The offset from the begining
+		int offset = numTreesForMaster * numValidation;
+
+		int workerId;
+		for (workerId = 1; workerId < numWorkers; workerId++){
+			MPI_Recv(
+				incomingPredictions,		// buffer
+				sizeOfIncomingPrediction,	// size of buffer
+				MPI_INT,					// data type
+				workerId,					// the source
+				0,							// TAG
+				MPI_COMM_WORLD,				// Communication
+				MPI_STATUS_IGNORE);			// Status - IGNORE
+
+			// Add predictions to main matrix
 
 
-	// }
+			for (treeInd = 0; treeInd < numTreesPerWorker; treeInd++){
+				for (datapointIndex = 0; datapointIndex < numValidation; datapointIndex++){
+					predictionMatrix[offset + treeInd * numValidation + datapointIndex] =
+						incomingPredictions[treeInd * numValidation + datapointIndex];
+				}
+			}
+
+		}
+
+		// Calculate accuracy
+
+		int *finalVotePredictions = get_majority_vote(
+			numTrees,
+			numValidation,
+			predictionMatrix,
+			numClasses);
+
+		float accuracy = get_accuracy(numValidation, validationLabels, finalVotePredictions);
+
+		printf("\n\nAccuracy: %.2f\n\n", accuracy * 100);
+		fflush(stdout);
+
+
+		free(finalVotePredictions);
+		free(incomingPredictions);
+		free(predictionMatrix);
+
+	}
+	else {
+		// Send predictions to the master
+
+		MPI_Send(
+			localPredictionMatrix,
+			treesToTrain * numValidation,
+			MPI_INT,
+			0,								// Destination - master
+			0,
+			MPI_COMM_WORLD);
+
+	}
 	
 
+	free(localPredictionMatrix);
 
 	free(dataset);
-	// Ovaj free ispod daje error
-	//free(labels);
+	free(labels);
+
+	free(datasetSample);
+	free(sampleLabels);
+	
+	free(trainSet);
+	free(trainLabels);
+
+	free(validationSet);
+	free(validationLabels);
+
 	MPI_Finalize();
 
 	return 0;
