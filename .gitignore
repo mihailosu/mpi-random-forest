@@ -1,3 +1,5 @@
 program
 program[B
+*.o
 sonar.mines
+build/*

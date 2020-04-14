@@ -3,36 +3,17 @@
 #include <string.h>
 #include <math.h>
 #include <time.h> 
+#include <unistd.h>
 
-typedef struct Node {
-	int colIndex;
-	double value;
+#include "mpi.h"
 
-	int isLeaf;
-	int label;
+#include "program.h"
 
-	struct Node *left;
-	struct Node *right;
-} Node;
-
-typedef struct LabelMap {
-	char name[10];
-	int value;
-} LabelMap;
-
-
-void print_tree(Node *node, int depth);
-int majority_class(int numRows, int *classLabels, int numClasses);
-void print_dataset_row(int numRows, int numCols, double *dataset, int index);
-Node * get_split(int numRows, int numCols, double *dataset, int *labels, int numClasses, int numSelectedFeatureColumns, int **selectedFeatureColumns, int currentDepth);
-Node * create_tree(int numRows, int numCols, double *dataset, int *labels, int numClasses, int maxDepth, int numFeatures);
-int read_csv(char *fname, double **dataset, long int *numFeatures, long int *numLabels, LabelMap **labelMap, int **intLabelsIn);
-int get_dataset_sample(int numRows, int numColumns, double *dataset, int *labels, float ratio, double **datasetSample, int **sampleLabels);
-void shuffle_dataset(int numInstances, long int numCols, double **dataset, int **labels);
-float gini_index(int nLeft, int *leftLabels, int nRight, int *rightLabels, int numClasses);
-float gini_index_2(int nLeft, int *leftLabels, int nRight, int *rightLabels, int numClasses);
-int split_dataset(int numRows, int numCols, double *dataset, int *labels, float ratio, double **train_data, int **train_labels, double **validation_data, int **validation_labels);
-
+#define USAGE_MSG "[ERROR] Invalid input arguments. Arguments should be:\n\
+	1. dataset name\n\
+	2. number of features to sample (-1 for default)\n\
+	3. number of trees to create\n\
+	4. max decision tree depth\n"
 
 void print_tree(Node *node, int depth){
 
@@ -141,7 +122,7 @@ Node * get_split(
 
 	for (featureIndex = 0; featureIndex < numSelectedFeatureColumns; featureIndex++){
 
-		printf("\tSelecting feature index %d\n", featureIndex);
+		// printf("\tSelecting feature index %d\n", featureIndex);
 
 		// If the feature is unavailable
 		if (featureColPtr[featureIndex] == -1){
@@ -184,14 +165,14 @@ Node * get_split(
 				if (splitMap[innerRow] == 0){
 					leftLabels[lCount++] = labels[innerRow];
 					if (labels[innerRow] > 1){
-						printf("Label going left: %d\n", leftLabels[lCount - 1]);
+						printf("Label at %d going left: %d\n", innerRow, leftLabels[lCount - 1]);
 						
 					}
 				}
 				else {
 					rightLabels[rCount++] = labels[innerRow];
 					if (labels[innerRow] > 1){
-						printf("Label going right: %d\n", rightLabels[rCount - 1]);
+						printf("Label at %d going right: %d\n", innerRow, rightLabels[rCount - 1]);
 						
 					}
 				}
@@ -228,6 +209,21 @@ Node * get_split(
 	} // End for (on features)
 
 	printf("Best feature index at depth %d is: %d\n", currentDepth, bestFeatureIndex);
+
+	// If there are NO FEATURES AVAILABLE
+	if (bestFeatureIndex == -1){
+		// Just return the majority class of the whole dataset
+		printf("[Error] No more features to sample! Creating leaf...\n");
+		Node *leaf = (Node *) malloc(sizeof(Node));
+		int majorityClass;
+
+		majorityClass = majority_class(numRows, labels, numClasses);
+
+		leaf->isLeaf = 1;
+		leaf->label = majorityClass;
+
+		return leaf;
+	}
 
 	// After we've found the best feature based on the Gini Impurity 
 	// we have to remove that feature from the feature pool
@@ -396,8 +392,8 @@ Node * create_tree(
 int read_csv(
 		char *fname, 
 		double **dataset, 
-		long int *numFeatures, 
-		long int *numLabels,
+		int *numFeatures, 
+		int *numLabels,
 		LabelMap **labelMap,
 		int **intLabelsIn){
 	FILE *f;
@@ -411,29 +407,33 @@ int read_csv(
 		// Read num of instances
 		fgets(line, sizeof(line), f);
 
-		long int numInstances = strtol(line, NULL, 10);
+		int numInstances = (int) strtol(line, NULL, 10);
 
-		printf("Num instances %ld\n", numInstances);
+		printf("Num instances %d\n", numInstances);
 
 		// Read num of features
 		fgets(line, sizeof(line), f);
 
-		*numFeatures = strtol(line, NULL, 10);
+		*numFeatures = (int) strtol(line, NULL, 10);
 
-		printf("Num of features %ld\n", *numFeatures);
+		printf("Num of features %d\n", *numFeatures);
 
 		// Read num of labels, and initialize LabelMap
 		fgets(line, sizeof(line), f);
 
-		*numLabels = strtol(line, NULL, 10);
+		*numLabels = (int) strtol(line, NULL, 10);
 
-		printf("Num of labels %ld\n", *numLabels);
+		printf("Num of labels %d\n", *numLabels);
 
 		LabelMap lblMap[*numLabels];
 
 		*labelMap = lblMap;
 
-		int intLabels[numInstances];
+		// int intLabels[numInstances];
+
+		// *intLabelsIn = intLabels;
+
+		int *intLabels = (int *) malloc(numInstances * sizeof(int));
 
 		*intLabelsIn = intLabels;
 
@@ -841,88 +841,423 @@ int split_dataset(
 }
 
 
+float validate_tree(
+	int numRows,
+	int numColumns,
+	double *validationSet,
+	int *validationLabels,
+	Node *root){
+
+	int numCorrect = 0;
+
+	Node *currNode = root;
+
+	double observedValue;
+	int predictedLabel;
+
+	int i;
+	for (i = 0; i < numRows; i++){
+
+		while (currNode->isLeaf == 0){
+			// Find a leaf
+
+			observedValue = validationSet[i * numColumns + currNode->colIndex];
+
+			if (observedValue <= currNode->value){
+				// Go left in the tree
+				currNode = currNode->left;
+			}
+			else {
+				// Go right in the tree
+				currNode = currNode->right;
+			}
+
+		}
+
+		predictedLabel = currNode->label;
+
+		if (predictedLabel == validationLabels[i]){
+			numCorrect++;
+		}
+
+	}
+
+	printf("\nNumber of correct %d", numCorrect);
+
+	float accuracy = ((float) numCorrect) / ((float) numRows);
+
+	return accuracy;
+
+}
+
 
 /*
- * Steps to take when paralelizin:
+ * Steps to take when paralelizing:
+ *	 0. Prompt user for:
+ *		- dataset name
+ *		- the max depth of the tree
+ *		- the number of features to consider when creating a tree
+ *		  (the number of split nodes to have)
  *   1. Determin how much trees each node should train
  *   	- each node will probably train > 1
  *   	- node 0 should train the leftover number of nodes
  *   2. Send the dataset to each node (include the dimensions of the matrix)
  *   3. Send 
  *
+ *	Arguments:
+ *		1. dataset name
+ *		2. number of workers
+ *		3. number of features to sample (-1 for default)
+ *		4. number of trees to create
+ *		5. max decision tree depth
+ *
  */
-int main(int argc, char *argv[]){
+// int algorithm_example(int argc, char *argv[]){
 
-	long int numFeatures;
-	long int numLabels;
+// 	long int numFeatures;
+// 	long int numLabels;
 
-	double *dataset;
-	// Label *labels; // Label strings of length 1
+// 	double *dataset;
+// 	// Label *labels; // Label strings of length 1
 
 
+// 	LabelMap *labelMap;
+
+// 	int *labels;
+
+// 	// The file is structured as follows:
+// 	// number of datapoints
+// 	// number of features
+// 	// number of classes
+// 	// data...
+// 	long int numInstances = read_csv(
+// 		"sonar.all-data", 
+// 		&dataset, 
+// 		&numFeatures,
+// 		&numLabels,
+// 		&labelMap,
+// 		&labels
+// 	);
+
+// 	// Print the first row of the dataset:
+
+// 	// int i;
+// 	// for (i = 0; i < numFeatures; i++){
+// 	// 	printf("%lf ", dataset[i]);
+// 	// }
+// 	// printf("\n");
+
+// 	// Print the label map
+
+// 	// int j;
+// 	// for (j = 0; j < numLabels; j++){
+// 	// 	printf("%s\n", (*(labelMap + j)).name);
+// 	// }
+
+// 	// int k;
+// 	// for (k = 0; k < numInstances; k++){
+// 	// 	printf("%d\n", labels[k]);
+// 	// }
+
+
+// 	///////////////////////
+// 	// RUN RANDOM FOREST //
+// 	///////////////////////
+
+// 	// Seed random values with time
+// 	srand(time(0));
+
+// 	/////////////////////////
+// 	// SHUFFLE THE DATASET //
+// 	/////////////////////////
+
+// 	printf("Shuffle the dataset...\n");
+// 	printf("Number of features %ld\n", numFeatures);
+// 	shuffle_dataset(
+// 		numInstances,
+// 		numFeatures,
+// 		&dataset,
+// 		&labels
+// 	);
+
+
+// 	////////////////////////////////////.
+// 	// SPLIT INTO TRAIN AND VALIDATION //
+// 	/////////////////////////////////////
+
+// 	double *trainSet;
+// 	int *trainLabels;
+// 	double *validationSet;
+// 	int *validationLabels;
+
+// 	int numTrain = split_dataset(
+// 		numInstances,
+// 		numFeatures,
+// 		dataset,
+// 		labels,
+// 		0.8,
+// 		&trainSet,
+// 		&trainLabels,
+// 		&validationSet,
+// 		&validationLabels
+// 	);
+
+
+
+// 	int numValidation = numInstances - numTrain;
+
+// 	printf("Dataset split --- train: %d | validation: %d", numTrain, numValidation);
+
+// 	int i;
+// 	for (i = 0; i < 5; i++){
+// 		print_dataset_row(numTrain, numFeatures, trainSet, i);
+// 		printf("%d\n", trainLabels[i]);
+// 	}
+
+
+// 	///////////////////////////
+// 	// GET DATASET SUBSAMPLE //
+// 	///////////////////////////
+
+// 	double *datasetSample;
+// 	int *sampleLabels;
+
+// 	int sampleSize = get_dataset_sample(
+// 		numTrain, 
+// 		numFeatures, 
+// 		trainSet, 
+// 		trainLabels, 
+// 		0.8, 
+// 		&datasetSample, 
+// 		&sampleLabels
+// 	);
+
+// 	/////////////////
+// 	// CREATE TREE //
+// 	/////////////////
+
+// 	// int numFeaturesToSample = round(sqrt(numFeatures));
+// 	int numFeaturesToSample = 30;
+
+// 	printf("Feature pool size is %d\n", numFeaturesToSample);
+
+// 	Node *root = create_tree(
+// 		sampleSize,
+// 		numFeatures,
+// 		datasetSample,
+// 		sampleLabels,
+// 		2, // Number of classes -  HARD CODED
+// 		10, // Max depth
+// 		numFeaturesToSample
+// 	);
+
+// 	print_tree(root, 0);
+
+// 	// Run test
+
+// 	float accuracy = validate_tree(
+// 		numValidation,
+// 		numFeatures,
+// 		validationSet,
+// 		validationLabels,
+// 		root);
+
+// 	printf("\n\nAccuracy: %.2f%\n\n", (accuracy * 100));
+
+// 	// Free memory
+
+// 	free(dataset);
+// 	free(labels);
+
+// 	// free(datasetSample);
+// 	// free(sampleLabels);
+
+// 	// free(validationSet);
+// 	// free(validationLabels);
+
+// 	return 0;
+// }
+
+
+int check_input(int argc, char *argv[]){
+
+	if (argc != 5){
+		printf(USAGE_MSG);
+		return 1;
+	}
+
+	char *fileName = argv[1];
+	int numFeaturesToSample = atoi(argv[2]);
+	int numTrees = atoi(argv[3]);
+	int maxDepth = atoi(argv[4]);
+
+	if (numFeaturesToSample <= 0
+		|| numTrees <= 0
+		|| maxDepth <= 0){
+		printf(USAGE_MSG);
+		return 1;
+	}
+
+	// Check if file exists
+	if (access(fileName, F_OK) == -1){
+		printf("[ERROR] \"%s\" does not exist.\n", fileName);
+		return 1;
+	}
+
+	return 0;
+
+}
+
+
+/*
+ *	Arguments:
+ *		1. dataset name
+ *		2. number of features to sample (-1 for default)
+ *		3. number of trees to create
+ *		4. max decision tree depth
+ */
+int main(int argc, char *argv[]) {
+
+	//////////////////////////
+	// VARIABLE DECLARATION //
+	//////////////////////////
+
+	int myRank;
+	int numWorkers;
+
+	int numTrees;
+	int maxTreeDepth;
+
+	int numTreesPerWorker;
+	int numTreesForMaster;
+
+	int numFeaturesToSample; // Number of random features to select when training
+
+	char *fileName;
+
+	int numRows;
+	int numCols;
+	int numClasses;
 	LabelMap *labelMap;
 
+	double *dataset;
 	int *labels;
 
-	// The file is structured as follows:
-	// number of datapoints
-	// number of features
-	// number of classes
-	// data...
-	long int numInstances = read_csv(
-		"sonar.all-data", 
-		&dataset, 
-		&numFeatures,
-		&numLabels,
-		&labelMap,
-		&labels
-	);
+	//////////////
+	// MPI INIT //
+	//////////////
 
-	// Print the first row of the dataset:
+	MPI_Init(NULL, NULL);
 
-	// int i;
-	// for (i = 0; i < numFeatures; i++){
-	// 	printf("%lf ", dataset[i]);
-	// }
-	// printf("\n");
+	MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+	MPI_Comm_size(MPI_COMM_WORLD, &numWorkers);
 
-	// Print the label map
-
-	// int j;
-	// for (j = 0; j < numLabels; j++){
-	// 	printf("%s\n", (*(labelMap + j)).name);
-	// }
-
-	// int k;
-	// for (k = 0; k < numInstances; k++){
-	// 	printf("%d\n", labels[k]);
-	// }
+	if (myRank == 0){
+	
+		if (check_input(argc, argv) != 0){
+			MPI_Finalize();
+		}	
 
 
-	///////////////////////
-	// RUN RANDOM FOREST //
-	///////////////////////
+		char *fileName = argv[1];
+		numFeaturesToSample = atoi(argv[2]);
+		numTrees = atoi(argv[3]);
+		maxTreeDepth = atoi(argv[4]);
 
-	// Seed random values with time
-	srand(time(0));
+		// Calculate number of trees per node
+		numTreesPerWorker = numTrees / numWorkers;
+		if (numTrees % numTreesPerWorker != 0){
+			numTreesForMaster = numTrees % numWorkers;
+		}
+		else {
+			numTreesForMaster = numTreesPerWorker;
+		}
 
-	/////////////////////////
-	// SHUFFLE THE DATASET //
-	/////////////////////////
+		printf("Number of trees per worker %d, and for the master %d\n", numTreesPerWorker, numTreesForMaster);
 
-	printf("Shuffle the dataset...\n");
-	printf("Number of features %ld\n", numFeatures);
-	shuffle_dataset(
-		numInstances,
-		numFeatures,
-		&dataset,
-		&labels
-	);
+		// Read dataset
+		numRows = read_csv(
+			fileName, 
+			&dataset, 
+			&numCols,
+			&numClasses,
+			&labelMap,
+			&labels
+		);
+
+		shuffle_dataset(
+			numRows,
+			numCols,
+			&dataset,
+			&labels
+		);
 
 
-	////////////////////////////////////.
-	// SPLIT INTO TRAIN AND VALIDATION //
-	/////////////////////////////////////
+	}
+
+	/*
+	 *	The master node should:
+	 *		1. Validate input
+	 *		2. Read the dataset
+	 *		3. Send the dataset dimensions
+	 *		4. Send the dataset to the workers
+	 *		5. Send the number of trees to create
+	 *		6. Send the max depth of the trees
+	 *		7. Send the number of features to sample
+	 */
+
+	/*
+	 *	The workers should:
+	 *		1. Accept dataset dims
+	 *		2. Accept the incoming dataset
+	 *		3. Split into train and validation sets
+	 *		4. Accept the rest of the variables...
+	 *		5. For each tree:
+	 *			- subample the train set
+	 *			- create tree
+	 */
+
+	////////////////////////
+	// BROADCAST THE DATA //
+	////////////////////////
+
+	MPI_Bcast(
+		&numClasses,		// buffer
+		1,					// length
+		MPI_INT,			// data type
+		0,					// root/sender 
+		MPI_COMM_WORLD		// comm port
+	);	// Send number of classes
+
+	MPI_Bcast(&numRows, 1, MPI_INT, 0, MPI_COMM_WORLD); // Num rows
+	MPI_Bcast(&numCols, 1, MPI_INT, 0, MPI_COMM_WORLD); // Num cols
+
+	if (myRank != 0){
+		
+		dataset = (double *) calloc(numRows * numCols, sizeof(double));
+		labels = (int *) calloc(numRows, sizeof(int));
+	}
+
+
+	MPI_Bcast(
+		dataset, 
+		(numRows * numCols),
+		MPI_DOUBLE,
+		0,
+		MPI_COMM_WORLD); // Send the dataset
+	MPI_Bcast(
+		labels,
+		numRows,
+		MPI_INT,
+		0,
+		MPI_COMM_WORLD); // Send labels
+	MPI_Bcast(&numFeaturesToSample, 1, MPI_INT, 0, MPI_COMM_WORLD); // Num features
+	MPI_Bcast(&numTreesPerWorker, 1, MPI_INT, 0, MPI_COMM_WORLD); // Num trees per worker
+	MPI_Bcast(&maxTreeDepth, 1, MPI_INT, 0, MPI_COMM_WORLD); // Max depth
+
+	///////////////////
+	// SPLIT DATASET //
+	///////////////////
 
 	double *trainSet;
 	int *trainLabels;
@@ -930,8 +1265,8 @@ int main(int argc, char *argv[]){
 	int *validationLabels;
 
 	int numTrain = split_dataset(
-		numInstances,
-		numFeatures,
+		numRows,
+		numCols,
 		dataset,
 		labels,
 		0.8,
@@ -942,28 +1277,20 @@ int main(int argc, char *argv[]){
 	);
 
 
+	int numValidation = numRows - numTrain;
 
-	int numValidation = numInstances - numTrain;
+	///////////////////////
+	// SUBSAMPLE DATASET //
+	///////////////////////
 
-	printf("Dataset split --- train: %d | validation: %d", numTrain, numValidation);
-
-	int i;
-	for (i = 0; i < 5; i++){
-		print_dataset_row(numTrain, numFeatures, trainSet, i);
-		printf("%d\n", trainLabels[i]);
-	}
-
-
-	///////////////////////////
-	// GET DATASET SUBSAMPLE //
-	///////////////////////////
+	srand(myRank);
 
 	double *datasetSample;
 	int *sampleLabels;
 
 	int sampleSize = get_dataset_sample(
 		numTrain, 
-		numFeatures, 
+		numCols, 
 		trainSet, 
 		trainLabels, 
 		0.8, 
@@ -971,28 +1298,73 @@ int main(int argc, char *argv[]){
 		&sampleLabels
 	);
 
-	/////////////////
-	// CREATE TREE //
-	/////////////////
 
-	int numFeaturesToSample = round(sqrt(numFeatures));
 
-	printf("Feature pool size is %d\n", numFeaturesToSample);
+	//////////////////
+	// CREATE TREES //
+	//////////////////
 
-	Node *root = create_tree(
-		sampleSize,
-		numFeatures,
-		datasetSample,
-		sampleLabels,
-		2, // Number of classes -  HARD CODED
-		3, // Max depth
-		numFeaturesToSample
-	);
+	// The master will have at most this many trees,
+	// if not less
+	Node *roots[numTreesPerWorker];
 
-	print_tree(root, 0);
+	int treesToTrain;
+	if (myRank == 0){
+		treesToTrain = numTreesForMaster;
+	}
+	else {
+		treesToTrain = numTreesPerWorker;
+	}
+	printf("treesToTrain %d\n", treesToTrain);
+	fflush(stdout);
 
-	// Free memory
+	int treeInd;
+	for (treeInd = 0; treeInd < treesToTrain; treeInd++){
+
+		roots[treeInd] = create_tree(
+			sampleSize,
+			numCols,
+			datasetSample,
+			sampleLabels,
+			2, // Number of classes -  HARD CODED
+			maxTreeDepth, // Max depth
+			numFeaturesToSample
+		);
+		printf("\n\n>>>%d trained #%d tree\n\n", myRank, treeInd);
+		fflush(stdout);
+	}
+
+
+	// /////////////////////
+	// // ACCURACY REPORT //
+	// /////////////////////
+
+	// if (myRank == 0){
+	// 	// Create prediction matrix (numTrees * numValidation)
+
+	// 	// Add my predictions to the matrix
+
+	// 	// Accept predictions of workers
+
+	// 	// Calculate accuracy
+
+	// }
+	// else {
+	// 	// Create prediction matric (numTreesPerWorker * numValidation)
+
+	// 	// Fill out predictions
+
+	// 	// Send predictions to the master
+
+
+	// }
+	
+
 
 	free(dataset);
+	// Ovaj free ispod daje error
+	//free(labels);
+	MPI_Finalize();
+
 	return 0;
 }
