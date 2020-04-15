@@ -281,7 +281,7 @@ Node * get_split(
 
 
 		int majorityLeft = majority_class(bestNLeft, bestLeftLabels, numClasses);
-		int majorityRIght = majority_class(bestNRight, bestRightLabels, numClasses);
+		int majorityRight = majority_class(bestNRight, bestRightLabels, numClasses);
 
 		// These 2 leaf nodes could be merged into one... TODO
 
@@ -289,7 +289,7 @@ Node * get_split(
 		leafLeft->label = majorityLeft;
 
 		leafRight->isLeaf = 1;
-		leafRight->label = majorityRIght;
+		leafRight->label = majorityRight;
 
 		lastParent->left = leafLeft;
 		lastParent->right = leafRight;
@@ -728,77 +728,6 @@ void shuffle_dataset(int numInstances, long int numCols, double **dataset, int *
  * @param nRight Number of elements in the right side of the split
  * @param rightLabels Labels of the elements in the right split
  * @param numClasses Number of classes
- */
-float gini_index(int nLeft, int *leftLabels, int nRight, int *rightLabels, int numClasses){
-
-	int totalNumInstances = nLeft + nRight;
-
-	float gini = 0.0;
-
-	int i, labelMarker;
-	
-	float score = 0.0;
-	float p = 0;
-	int count = 0;
-	// Calculate score for the left group;
-	if (nLeft){
-		// If there are instances in the left group
-		// For every class...
-		for (labelMarker = 0; labelMarker < numClasses; labelMarker++){
-			// ... count the number of occurences of that class
-			// in the left group
-			for (i = 0; i < nLeft; i++){
-				if (leftLabels[i] == labelMarker){
-					count++;
-				}
-			}
-			// Calculate the probability of an instance belonging
-			// to the class
-			p = count / nLeft;
-			score += (p * p);
-		}
-		// printf("\t\tScore LEFT: %f\n", score);
-		// Update the gini index for the left side of the split
-		gini += ((1.0 - score) * (nLeft / totalNumInstances));
-	}
-
-	count = 0;
-	p = 0;
-	score = 0.0;
-
-	// Calculate score for the right group
-
-	if (nRight){
-		// If there are instances in the left group
-		// For every class...
-		for (labelMarker = 0; labelMarker < numClasses; labelMarker++){
-			// ... count the number of occurences of that class
-			// in the left group
-			for (i = 0; i < nRight; i++){
-				if (rightLabels[i] == labelMarker){
-					count++;
-				}
-			}
-			// Calculate the probability of an instance belonging
-			// to the class
-			p = count / nRight;
-			score += (p * p);
-		}
-		// printf("\t\tScore RIGHT: %f\n", score);
-		// Update the gini index for the right side of the split
-		gini += ((1.0 - score) * (nRight / totalNumInstances));
-	}
-
-	return gini;
-
-}
-
-/*
- *
- *
- *
- *
- * ZANIMLJIVOST: Potrebno je naglasiti ako nije celobrojno deljenje...
  */
 float gini_index_2(int nLeft, int *leftLabels, int nRight, int *rightLabels, int numClasses){
 
@@ -1290,7 +1219,7 @@ int main(int argc, char *argv[]) {
 		numCols, 
 		trainSet, 
 		trainLabels, 
-		0.7, 
+		1, 
 		&datasetSample, 
 		&sampleLabels
 	);
@@ -1325,12 +1254,12 @@ int main(int argc, char *argv[]) {
 			numCols,
 			datasetSample,
 			sampleLabels,
-			2, // Number of classes -  HARD CODED
+			numClasses, // Number of classes -  HARD CODED
 			maxTreeDepth, // Max depth
 			numFeaturesToSample
 		);
-		printf("\n\n>>>%d trained #%d tree\n\n", myRank, treeInd);
-		// print_tree(trees[treeInd], 0);
+		printf("\n\n>>>Rank %d trained tree #%d\n\n", myRank, treeInd);
+		print_tree(trees[treeInd], 0);
 		fflush(stdout);
 	}
 
