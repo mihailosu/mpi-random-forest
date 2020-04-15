@@ -18,7 +18,8 @@ typedef struct LabelMap {
 void print_tree(Node *node, int depth);
 int majority_class(int numRows, int *classLabels, int numClasses);
 void print_dataset_row(int numRows, int numCols, double *dataset, int index);
-Node * get_split(int numRows, int numCols, double *dataset, int *labels, int numClasses, int numSelectedFeatureColumns, int **selectedFeatureColumns, int currentDepth);
+// Node * get_split(int numRows, int numCols, double *dataset, int *labels, int numClasses, int numSelectedFeatureColumns, int **selectedFeatureColumns, int currentDepth);
+Node * get_split(int numRows, int numCols, double *dataset, int *labels, int numClasses, int numSelectedFeatureColumns, int currentDepth);
 Node * create_tree(int numRows, int numCols, double *dataset, int *labels, int numClasses, int maxDepth, int numFeatures);
 // int read_csv(char *fname, double **dataset, long int *numFeatures, long int *numLabels, LabelMap **labelMap, int **intLabelsIn);
 int read_csv(char *fname, double **dataset, int *numFeatures, int *numLabels, LabelMap **labelMap, int **intLabelsIn);

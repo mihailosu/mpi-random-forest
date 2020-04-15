@@ -52,8 +52,13 @@ void print_dataset_row(int numRows, int numCols, double *dataset, int index){
 
 int majority_class(int numRows, int *classLabels, int numClasses){
 	int counters[numClasses];
-
+	
 	int i;
+	for (i = 0; i < numClasses; i++){
+		counters[i] = 0;
+	} 
+
+	
 	for (i = 0; i < numRows; i++){
 		if (classLabels[i] > 1){
 			printf("Class label %d\n", classLabels[i]);
@@ -95,7 +100,6 @@ Node * get_split(
 		int *labels,
 		int numClasses,
 		int numSelectedFeatureColumns,
-		int **selectedFeatureColumns,
 		int currentDepth){
 
 
@@ -114,9 +118,50 @@ Node * get_split(
 		return leaf;
 	}
 
+	////////////////////////////
+	// SELECT RANDOM FEATURES //
+	////////////////////////////
+
+	int *selectedColumns = (int *) malloc(numSelectedFeatureColumns * sizeof(int));
+	
+	// Initialize selected columns to -1
+	int cntr;
+	for (cntr = 0; cntr < numSelectedFeatureColumns; cntr++){
+		selectedColumns[cntr] = -1;
+	}
+
+	cntr = 0;
+	int j;
+	int indexToSelect;
+	int alreadySelected;
+	// Select random columns to take into consideration
+	while (cntr < numSelectedFeatureColumns){
+		
+		alreadySelected = 0;
+
+		indexToSelect = rand() % numCols;
+
+		for (j = 0; j <= cntr; j++){
+			if (selectedColumns[j] == indexToSelect){
+				// Column is already selected
+				alreadySelected = 1;
+				break;
+			}
+		}
+
+		if (!alreadySelected){
+			// If we've picked a new column
+			selectedColumns[cntr] = indexToSelect;
+
+			cntr++;
+		}
+
+	}
+
+
 	// printf("Entered depth %d\n", currentDepth);
 	
-	int *featureColPtr = *selectedFeatureColumns;
+	// int *featureColPtr = *selectedFeatureColumns;
 	float gini = 10000.0; // Big enough number
 	float score;
 
@@ -138,14 +183,15 @@ Node * get_split(
 
 	for (featureIndex = 0; featureIndex < numSelectedFeatureColumns; featureIndex++){
 
-		// printf("\tSelecting feature index %d\n", featureIndex);
+		// printf("\tSelecting feature index %d and feature %d\n", featureIndex, selectedColumns[featureIndex]);
+		// fflush(stdout);
 
 		// If the feature is unavailable
-		if (featureColPtr[featureIndex] == -1){
-			continue;
-		}
+		// if (featureColPtr[featureIndex] == -1){
+		// 	continue;
+		// }
 
-		feature = featureColPtr[featureIndex];
+		feature = selectedColumns[featureIndex];
 
 		// For each row, calculate the gini score
 		// of the split with the value at that row
@@ -227,23 +273,23 @@ Node * get_split(
 	// printf("Best feature index at depth %d is: %d\n", currentDepth, bestFeatureIndex);
 
 	// If there are NO FEATURES AVAILABLE
-	if (bestFeatureIndex == -1){
-		// Just return the majority class of the whole dataset
-		// printf("[Tree Report] No more features to sample! Creating leaf...\n");
-		Node *leaf = (Node *) malloc(sizeof(Node));
-		int majorityClass;
+	// if (bestFeatureIndex == -1){
+	// 	// Just return the majority class of the whole dataset
+	// 	// printf("[Tree Report] No more features to sample! Creating leaf...\n");
+	// 	Node *leaf = (Node *) malloc(sizeof(Node));
+	// 	int majorityClass;
 
-		majorityClass = majority_class(numRows, labels, numClasses);
+	// 	majorityClass = majority_class(numRows, labels, numClasses);
 
-		leaf->isLeaf = 1;
-		leaf->label = majorityClass;
+	// 	leaf->isLeaf = 1;
+	// 	leaf->label = majorityClass;
 
-		return leaf;
-	}
+	// 	return leaf;
+	// }
 
 	// After we've found the best feature based on the Gini Impurity 
 	// we have to remove that feature from the feature pool
-	featureColPtr[bestFeatureIndex] = -1;
+	// featureColPtr[bestFeatureIndex] = -1;
 
 	// If the number of elements on either side of the split
 	// is 0, then this node becomes a leaf node
@@ -272,7 +318,7 @@ Node * get_split(
 		// printf("Second if\n");
 		Node *lastParent = (Node *) malloc(sizeof(Node));
 
-		lastParent->colIndex = bestFeatureIndex;
+		lastParent->colIndex = selectedColumns[bestFeatureIndex];
 		lastParent->value = bestSplitValue;
 		lastParent->isLeaf = 0;
 
@@ -302,15 +348,13 @@ Node * get_split(
 
 	Node *current = (Node *) malloc(sizeof(Node));
 
-	current->colIndex = bestFeatureIndex;
+	current->colIndex = selectedColumns[bestFeatureIndex];
 	current->value = bestSplitValue;
 	current->isLeaf = 0;
 
 	///////////////////////////////////////////
 	// SPLIT THE DATASET INTO LEFT AND RIGHT //
 	///////////////////////////////////////////
-
-	// TODO: NESTO OVDE NE VALJA
 
 	// *Could be done earlier, in the big for loop
 
@@ -337,12 +381,6 @@ Node * get_split(
 			numInRightDataset++;
 		}
 	}
-
-	// if (numInLeftDataset == 0 || numInRightDataset ==0){
-	// 	printf("\n\n>>>>IMA NULA\n\n");
-	// 	fflush(stdout);
-		
-	// }
 
 	leftSplitDataset = (double *) malloc(numInLeftDataset * numCols * sizeof(double));
 	rightSplitDataset = (double *) malloc(numInRightDataset * numCols * sizeof(double));
@@ -380,7 +418,6 @@ Node * get_split(
 		leftSplitLabels,
 		numClasses,
 		numSelectedFeatureColumns,
-		selectedFeatureColumns,
 		currentDepth - 1);
 
 	Node *rightChild = get_split(
@@ -390,33 +427,11 @@ Node * get_split(
 		rightSplitLabels,
 		numClasses,
 		numSelectedFeatureColumns,
-		selectedFeatureColumns,
 		currentDepth - 1);
 
 	////////////////////////
 	// WITH SPLITTING END //
 	////////////////////////
-
-	// Node *leftChild = get_split(
-	// 	numRows,
-	// 	numCols,
-	// 	dataset,
-	// 	labels,
-	// 	numClasses,
-	// 	numSelectedFeatureColumns,
-	// 	selectedFeatureColumns,
-	// 	currentDepth - 1);
-
-	// Node *rightChild = get_split(
-	// 	numRows,
-	// 	numCols,
-	// 	dataset,
-	// 	labels,
-	// 	numClasses,
-	// 	numSelectedFeatureColumns,
-	// 	selectedFeatureColumns,
-	// 	currentDepth - 1);
-
 
 	current->left = leftChild;
 	current->right = rightChild;
@@ -441,47 +456,10 @@ Node * create_tree(
 		int maxDepth,
 		int numFeatures){
 
-	int *selectedColumns = (int *) malloc(numFeatures * sizeof(int));
-	
-	// Initialize selected columns to -1
-	int i;
-	for (i = 0; i < numFeatures; i++){
-		selectedColumns[i] = -1;
-	}
-
-	i = 0;
-	int j;
-	int indexToSelect;
-	int alreadySelected;
-	// Select random columns to take into consideration
-	while (i < numFeatures){
-		
-		alreadySelected = 0;
-
-		indexToSelect = rand() % numFeatures;
-
-		for (j = 0; j <= i; j++){
-			if (selectedColumns[j] == indexToSelect){
-				// Column is already selected
-				alreadySelected = 1;
-				break;
-			}
-		}
-
-		if (!alreadySelected){
-			// If we've picked a new column
-			selectedColumns[i] = indexToSelect;
-
-			i++;
-		}
-
-	}
-
 	/////////////////
 	// CREATE TREE //
 	/////////////////
 
-	// printf("Creating root for dataset with %d rows\n", numRows);
 
 	Node *root = get_split(
 		numRows,
@@ -490,10 +468,8 @@ Node * create_tree(
 		labels,
 		numClasses,
 		numFeatures,
-		&selectedColumns,
 		maxDepth);
 
-	free(selectedColumns);
 
 	return root;
 
@@ -958,9 +934,17 @@ int * get_majority_vote(
 	int maxVoteIndex;
 	int votes[numClasses];
 
+
 	int treeInd;
 	int instance;
 	for (instance = 0; instance < numInstances; instance++){
+
+		
+		int i;
+		for (i = 0; i < numClasses; i++){
+			votes[i] = 0;
+		} 
+		
 		for (treeInd = 0; treeInd < numTrees; treeInd++){
 			vote = matrix[treeInd * numInstances + instance];
 			if (vote >= numClasses){
@@ -971,7 +955,7 @@ int * get_majority_vote(
 		}
 
 		maxVoteIndex = 0;
-		for (int i = 0; i < numClasses; i++){
+		for (i = 0; i < numClasses; i++){
 			if (votes[i] > votes[maxVoteIndex]){
 				maxVoteIndex = i;
 			}
@@ -992,8 +976,8 @@ float get_accuracy(int n, int *labels, int *predictions){
 	int i;
 	for (i = 0; i < n; i++){
 
-		// printf("%d == %d!\n", labels[i], predictions[i]);
-		// fflush(stdout);
+		printf("%d == %d!\n", labels[i], predictions[i]);
+		fflush(stdout);
 		if (labels[i] == predictions[i]){
 			numCorrect++;
 		}
@@ -1209,7 +1193,7 @@ int main(int argc, char *argv[]) {
 	// SUBSAMPLE DATASET //
 	///////////////////////
 
-	srand(time(NULL) * myRank);
+	srand(time(NULL));
 
 	double *datasetSample;
 	int *sampleLabels;
