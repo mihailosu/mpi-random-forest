@@ -28,7 +28,6 @@ float gini_index(int nLeft, int *leftLabels, int nRight, int *rightLabels, int n
 float gini_index_2(int nLeft, int *leftLabels, int nRight, int *rightLabels, int numClasses);
 int split_dataset(int numRows, int numCols, double *dataset, int *labels, float ratio, double **train_data, int **train_labels, double **validation_data, int **validation_labels);
 float validate_tree(int numRows, int numColumns, double *validationSet, int *validationLabels, Node *root);
-int algorithm_example(int argc, char *argv[]);
 int check_input(int argc, char *argv[]);
 int * predict(int numRows, int numCols, double *dataset, Node *root);
 int * get_majority_vote(int numTrees, int numInstances, int *matrix, int numClasses);

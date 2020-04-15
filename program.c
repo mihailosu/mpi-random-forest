@@ -98,8 +98,11 @@ Node * get_split(
 		int **selectedFeatureColumns,
 		int currentDepth){
 
+
 	if (numRows < 5){
 		// Too few instances, return the majority class
+		// printf("[Error] Zero rows\n");
+		fflush(stdout);
 		Node *leaf = (Node *) malloc(sizeof(Node));
 		int majorityClass;
 
@@ -226,7 +229,7 @@ Node * get_split(
 	// If there are NO FEATURES AVAILABLE
 	if (bestFeatureIndex == -1){
 		// Just return the majority class of the whole dataset
-		printf("[Error] No more features to sample! Creating leaf...\n");
+		// printf("[Tree Report] No more features to sample! Creating leaf...\n");
 		Node *leaf = (Node *) malloc(sizeof(Node));
 		int majorityClass;
 
@@ -335,6 +338,12 @@ Node * get_split(
 		}
 	}
 
+	// if (numInLeftDataset == 0 || numInRightDataset ==0){
+	// 	printf("\n\n>>>>IMA NULA\n\n");
+	// 	fflush(stdout);
+		
+	// }
+
 	leftSplitDataset = (double *) malloc(numInLeftDataset * numCols * sizeof(double));
 	rightSplitDataset = (double *) malloc(numInRightDataset * numCols * sizeof(double));
 	leftSplitLabels = (int *) malloc(numInLeftDataset * sizeof(int));
@@ -412,11 +421,11 @@ Node * get_split(
 	current->left = leftChild;
 	current->right = rightChild;
 
-	// free(leftSplitDataset);
-	// free(leftSplitLabels);
+	free(leftSplitDataset);
+	free(leftSplitLabels);
 
-	// free(rightSplitDataset);
-	// free(rightSplitLabels);
+	free(rightSplitDataset);
+	free(rightSplitLabels);
 
 	return current;
 
@@ -472,7 +481,7 @@ Node * create_tree(
 	// CREATE TREE //
 	/////////////////
 
-	printf("Creating root for dataset with %d rows\n", numRows);
+	// printf("Creating root for dataset with %d rows\n", numRows);
 
 	Node *root = get_split(
 		numRows,
@@ -674,9 +683,6 @@ int get_dataset_sample(
 
 void shuffle_dataset(int numInstances, long int numCols, double **dataset, int **labels){
 
-	// printf("Number of rows %d\n", numInstances);
-	// printf("Number of columns %ld\n", numCols);
-
 	int *lblPointer = *labels;
 
 
@@ -689,51 +695,24 @@ void shuffle_dataset(int numInstances, long int numCols, double **dataset, int *
 
 		int colIndex;
 
-		// printf("Before\n");
-		// print_dataset_row(numInstances, numCols, *dataset, i);
-		// print_dataset_row(numInstances, numCols, *dataset, randElementIndex);
-
-		// temp = dataset[i]
 		for (colIndex = 0; colIndex < numCols; colIndex++){
-			// printf("%d\n", colIndex);
 			temp[colIndex] = (*dataset)[i * numCols + colIndex];
 		}
 
-			// printf("%s\n", "Done");
-		// dataset[i] = dataset[randIndex]
 		for (colIndex = 0; colIndex < numCols; colIndex++){
-			// printf("%s\n", "B");
 			(*dataset)[i * numCols + colIndex] = (*dataset)[randElementIndex * numCols + colIndex];
 		}
 
-		// dataset[randIndex] = temp
 		for (colIndex = 0; colIndex < numCols; colIndex++){
-			// printf("%s\n", "C");
 			(*dataset)[randElementIndex * numCols + colIndex] = temp[colIndex];
 		}
 
-
-		// printf("After\n");
-		// print_dataset_row(numInstances, numCols, *dataset, i);
-		// print_dataset_row(numInstances, numCols, *dataset, randElementIndex);
-
-		// // Shuffle labels the same way
+		// Shuffle labels the same way
 		tempInt = lblPointer[i];
-		// tempInt = (*labels)[i];
-
-		// printf("Switching label #%d and #%d, values: %d and %d\n", 
-		// 	i, randElementIndex,
-		// 	(lblPointer[i]), (lblPointer[randElementIndex]));
 
 		lblPointer[i] = lblPointer[randElementIndex];
-		// ((*labels)[i]) = ((*labels)[randElementIndex]);
 
 		lblPointer[randElementIndex] = tempInt;
-		// ((*labels)[randElementIndex]) = tempInt;
-
-		// tempInt = (*labels)[i];
-
-		// printf("%d) %d\n", i, (*labels)[i]);
 
 	}
 
@@ -860,12 +839,6 @@ float gini_index_2(int nLeft, int *leftLabels, int nRight, int *rightLabels, int
 	}
 
 	float scoreLeft = 0.0, scoreRight = 0.0;
-
-	// printf("\t\tTotal: %d\n", totalNumInstances);
-	// printf("\t\tLeft [0]: %d\n", leftLblCount[0]);/
-	// printf("\t\tLeft [1]: %d\n", leftLblCount[1]);
-	// printf("\t\tRight [0]: %d\n", rightLblCount[0]);
-	// printf("\t\tRight [1]: %d\n", rightLblCount[1]);
 
 	if (nLeft){
 		p = (float) leftLblCount[0] / nLeft;
@@ -1053,7 +1026,7 @@ int * get_majority_vote(
 	int *voteResults = (int *) calloc(numInstances, sizeof(int));
 
 	int vote;
-	int maxVote;
+	int maxVoteIndex;
 	int votes[numClasses];
 
 	int treeInd;
@@ -1061,17 +1034,21 @@ int * get_majority_vote(
 	for (instance = 0; instance < numInstances; instance++){
 		for (treeInd = 0; treeInd < numTrees; treeInd++){
 			vote = matrix[treeInd * numInstances + instance];
+			if (vote >= numClasses){
+				printf("Bad label: %d", vote);
+				fflush(stdout);
+			}
 			votes[vote]++;
 		}
 
-		maxVote = 0;
+		maxVoteIndex = 0;
 		for (int i = 0; i < numClasses; i++){
-			if (votes[i] > maxVote){
-				maxVote = i;
+			if (votes[i] > votes[maxVoteIndex]){
+				maxVoteIndex = i;
 			}
 		}
 
-		voteResults[instance] = maxVote;
+		voteResults[instance] = maxVoteIndex;
 
 	}
 
@@ -1081,13 +1058,13 @@ int * get_majority_vote(
 
 float get_accuracy(int n, int *labels, int *predictions){
 
-	int numCorrect;
+	int numCorrect = 0;
 
 	int i;
 	for (i = 0; i < n; i++){
 
-		printf("%d == %d!\n", labels[i], predictions[i]);
-		fflush(stdout);
+		// printf("%d == %d!\n", labels[i], predictions[i]);
+		// fflush(stdout);
 		if (labels[i] == predictions[i]){
 			numCorrect++;
 		}
@@ -1096,195 +1073,6 @@ float get_accuracy(int n, int *labels, int *predictions){
 	return (((float) numCorrect) / ((float) n));
 
 }
-
-
-/*
- * Steps to take when paralelizing:
- *	 0. Prompt user for:
- *		- dataset name
- *		- the max depth of the tree
- *		- the number of features to consider when creating a tree
- *		  (the number of split nodes to have)
- *   1. Determin how much trees each node should train
- *   	- each node will probably train > 1
- *   	- node 0 should train the leftover number of nodes
- *   2. Send the dataset to each node (include the dimensions of the matrix)
- *   3. Send 
- *
- *	Arguments:
- *		1. dataset name
- *		2. number of workers
- *		3. number of features to sample (-1 for default)
- *		4. number of trees to create
- *		5. max decision tree depth
- *
- */
-// int algorithm_example(int argc, char *argv[]){
-
-// 	long int numFeatures;
-// 	long int numLabels;
-
-// 	double *dataset;
-// 	// Label *labels; // Label strings of length 1
-
-
-// 	LabelMap *labelMap;
-
-// 	int *labels;
-
-// 	// The file is structured as follows:
-// 	// number of datapoints
-// 	// number of features
-// 	// number of classes
-// 	// data...
-// 	long int numInstances = read_csv(
-// 		"sonar.all-data", 
-// 		&dataset, 
-// 		&numFeatures,
-// 		&numLabels,
-// 		&labelMap,
-// 		&labels
-// 	);
-
-// 	// Print the first row of the dataset:
-
-// 	// int i;
-// 	// for (i = 0; i < numFeatures; i++){
-// 	// 	printf("%lf ", dataset[i]);
-// 	// }
-// 	// printf("\n");
-
-// 	// Print the label map
-
-// 	// int j;
-// 	// for (j = 0; j < numLabels; j++){
-// 	// 	printf("%s\n", (*(labelMap + j)).name);
-// 	// }
-
-// 	// int k;
-// 	// for (k = 0; k < numInstances; k++){
-// 	// 	printf("%d\n", labels[k]);
-// 	// }
-
-
-// 	///////////////////////
-// 	// RUN RANDOM FOREST //
-// 	///////////////////////
-
-// 	// Seed random values with time
-// 	srand(time(0));
-
-// 	/////////////////////////
-// 	// SHUFFLE THE DATASET //
-// 	/////////////////////////
-
-// 	printf("Shuffle the dataset...\n");
-// 	printf("Number of features %ld\n", numFeatures);
-// 	shuffle_dataset(
-// 		numInstances,
-// 		numFeatures,
-// 		&dataset,
-// 		&labels
-// 	);
-
-
-// 	////////////////////////////////////.
-// 	// SPLIT INTO TRAIN AND VALIDATION //
-// 	/////////////////////////////////////
-
-// 	double *trainSet;
-// 	int *trainLabels;
-// 	double *validationSet;
-// 	int *validationLabels;
-
-// 	int numTrain = split_dataset(
-// 		numInstances,
-// 		numFeatures,
-// 		dataset,
-// 		labels,
-// 		0.8,
-// 		&trainSet,
-// 		&trainLabels,
-// 		&validationSet,
-// 		&validationLabels
-// 	);
-
-
-
-// 	int numValidation = numInstances - numTrain;
-
-// 	printf("Dataset split --- train: %d | validation: %d", numTrain, numValidation);
-
-// 	int i;
-// 	for (i = 0; i < 5; i++){
-// 		print_dataset_row(numTrain, numFeatures, trainSet, i);
-// 		printf("%d\n", trainLabels[i]);
-// 	}
-
-
-// 	///////////////////////////
-// 	// GET DATASET SUBSAMPLE //
-// 	///////////////////////////
-
-// 	double *datasetSample;
-// 	int *sampleLabels;
-
-// 	int sampleSize = get_dataset_sample(
-// 		numTrain, 
-// 		numFeatures, 
-// 		trainSet, 
-// 		trainLabels, 
-// 		0.8, 
-// 		&datasetSample, 
-// 		&sampleLabels
-// 	);
-
-// 	/////////////////
-// 	// CREATE TREE //
-// 	/////////////////
-
-// 	// int numFeaturesToSample = round(sqrt(numFeatures));
-// 	int numFeaturesToSample = 30;
-
-// 	printf("Feature pool size is %d\n", numFeaturesToSample);
-
-// 	Node *root = create_tree(
-// 		sampleSize,
-// 		numFeatures,
-// 		datasetSample,
-// 		sampleLabels,
-// 		2, // Number of classes -  HARD CODED
-// 		10, // Max depth
-// 		numFeaturesToSample
-// 	);
-
-// 	print_tree(root, 0);
-
-// 	// Run test
-
-// 	float accuracy = validate_tree(
-// 		numValidation,
-// 		numFeatures,
-// 		validationSet,
-// 		validationLabels,
-// 		root);
-
-// 	printf("\n\nAccuracy: %.2f%\n\n", (accuracy * 100));
-
-// 	// Free memory
-
-// 	free(dataset);
-// 	free(labels);
-
-// 	// free(datasetSample);
-// 	// free(sampleLabels);
-
-// 	// free(validationSet);
-// 	// free(validationLabels);
-
-// 	return 0;
-// }
-
 
 int check_input(int argc, char *argv[]){
 
@@ -1373,12 +1161,14 @@ int main(int argc, char *argv[]) {
 
 		// Calculate number of trees per node
 		numTreesPerWorker = numTrees / numWorkers;
-		if (numTrees % numTreesPerWorker != 0){
-			numTreesForMaster = numTrees % numWorkers;
-		}
-		else {
-			numTreesForMaster = numTreesPerWorker;
-		}
+		// if (numTrees % numTreesPerWorker != 0){
+		// 	numTreesForMaster = numTrees % numWorkers;
+		// }
+		// else {
+		// 	numTreesForMaster = numTreesPerWorker;
+		// }
+
+		numTreesForMaster = numTrees - (numTreesPerWorker * (numWorkers - 1));
 
 		printf("Number of trees per worker %d, and for the master %d\n", numTreesPerWorker, numTreesForMaster);
 
@@ -1511,9 +1301,6 @@ int main(int argc, char *argv[]) {
 	// CREATE TREES //
 	//////////////////
 
-	// The master will have at most this many trees,
-	// if not less
-	Node *trees[numTreesPerWorker];
 
 	int treesToTrain;
 	if (myRank == 0){
@@ -1522,8 +1309,13 @@ int main(int argc, char *argv[]) {
 	else {
 		treesToTrain = numTreesPerWorker;
 	}
-	printf("treesToTrain %d\n", treesToTrain);
-	fflush(stdout);
+	// printf("[Rank %d] treesToTrain %d\n", myRank, treesToTrain);
+	// fflush(stdout);
+
+
+	// The master will have at most this many trees,
+	// if not less
+	Node *trees[treesToTrain];
 
 	int treeInd;
 	for (treeInd = 0; treeInd < treesToTrain; treeInd++){
@@ -1573,6 +1365,8 @@ int main(int argc, char *argv[]) {
 
 		int *predictionMatrix = (int *) malloc(numTrees * numValidation * sizeof(int));
 
+
+
 		// Add my predictions to the matrix
 
 		for (treeInd = 0; treeInd < treesToTrain; treeInd++){
@@ -1592,6 +1386,7 @@ int main(int argc, char *argv[]) {
 		// The offset from the begining
 		int offset = numTreesForMaster * numValidation;
 
+
 		int workerId;
 		for (workerId = 1; workerId < numWorkers; workerId++){
 			MPI_Recv(
@@ -1608,8 +1403,23 @@ int main(int argc, char *argv[]) {
 
 			for (treeInd = 0; treeInd < numTreesPerWorker; treeInd++){
 				for (datapointIndex = 0; datapointIndex < numValidation; datapointIndex++){
-					predictionMatrix[offset + treeInd * numValidation + datapointIndex] =
+					
+
+					int currWorkerOffset = 
+							offset + 
+							(workerId - 1) * numTreesPerWorker * numValidation + 
+							treeInd * numValidation + datapointIndex;
+					// printf("[%d]..............WRITING TO: %d\n", workerId, currWorkerOffset);
+					// fflush(stdout);	
+					// predictionMatrix[offset + workerId * treeInd * numValidation + datapointIndex] =
+					predictionMatrix[currWorkerOffset] =
 						incomingPredictions[treeInd * numValidation + datapointIndex];
+
+					// if (predictionMatrix[offset + workerId * treeInd * numValidation + datapointIndex] >= numClasses){
+					// 	printf("[==============] Bad label [%d] from [%d]\n\n", incomingPredictions[treeInd * numValidation + datapointIndex], workerId);
+					// 	fflush(stdout);
+						
+					// }
 				}
 			}
 
@@ -1622,6 +1432,7 @@ int main(int argc, char *argv[]) {
 			numValidation,
 			predictionMatrix,
 			numClasses);
+
 
 		float accuracy = get_accuracy(numValidation, validationLabels, finalVotePredictions);
 
