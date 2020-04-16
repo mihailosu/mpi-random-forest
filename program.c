@@ -3,6 +3,9 @@
 #include <string.h>
 #include <math.h>
 #include <time.h> 
+
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "mpi.h"
@@ -105,8 +108,6 @@ Node * get_split(
 
 	if (numRows < 5){
 		// Too few instances, return the majority class
-		// printf("[Error] Zero rows\n");
-		fflush(stdout);
 		Node *leaf = (Node *) malloc(sizeof(Node));
 		int majorityClass;
 
@@ -159,7 +160,6 @@ Node * get_split(
 	}
 
 
-	// printf("Entered depth %d\n", currentDepth);
 	
 	// int *featureColPtr = *selectedFeatureColumns;
 	float gini = 10000.0; // Big enough number
@@ -182,14 +182,6 @@ Node * get_split(
 	int splitMap[numRows];
 
 	for (featureIndex = 0; featureIndex < numSelectedFeatureColumns; featureIndex++){
-
-		// printf("\tSelecting feature index %d and feature %d\n", featureIndex, selectedColumns[featureIndex]);
-		// fflush(stdout);
-
-		// If the feature is unavailable
-		// if (featureColPtr[featureIndex] == -1){
-		// 	continue;
-		// }
 
 		feature = selectedColumns[featureIndex];
 
@@ -226,17 +218,9 @@ Node * get_split(
 			for (innerRow = 0; innerRow < numRows; innerRow++){
 				if (splitMap[innerRow] == 0){
 					leftLabels[lCount++] = labels[innerRow];
-					// if (labels[innerRow] > 1){
-					// 	printf("Label at %d going left: %d\n", innerRow, leftLabels[lCount - 1]);
-						
-					// }
 				}
 				else {
 					rightLabels[rCount++] = labels[innerRow];
-					// if (labels[innerRow] > 1){
-					// 	printf("Label at %d going right: %d\n", innerRow, rightLabels[rCount - 1]);
-						
-					// }
 				}
 			}
 
@@ -270,23 +254,6 @@ Node * get_split(
 		} // End for (on rows)
 	} // End for (on features)
 
-	// printf("Best feature index at depth %d is: %d\n", currentDepth, bestFeatureIndex);
-
-	// If there are NO FEATURES AVAILABLE
-	// if (bestFeatureIndex == -1){
-	// 	// Just return the majority class of the whole dataset
-	// 	// printf("[Tree Report] No more features to sample! Creating leaf...\n");
-	// 	Node *leaf = (Node *) malloc(sizeof(Node));
-	// 	int majorityClass;
-
-	// 	majorityClass = majority_class(numRows, labels, numClasses);
-
-	// 	leaf->isLeaf = 1;
-	// 	leaf->label = majorityClass;
-
-	// 	return leaf;
-	// }
-
 	// After we've found the best feature based on the Gini Impurity 
 	// we have to remove that feature from the feature pool
 	// featureColPtr[bestFeatureIndex] = -1;
@@ -295,7 +262,6 @@ Node * get_split(
 	// is 0, then this node becomes a leaf node
 
 	if (nLeft == 0 || nRight == 0){
-		// printf("First if\n");
 		Node *leaf = (Node *) malloc(sizeof(Node));
 		int majorityClass;
 
@@ -315,7 +281,6 @@ Node * get_split(
 	// If we've reached depth 1, then we split for the last time, and
 	// the children become terminal nodes
 	if (currentDepth == 1) {
-		// printf("Second if\n");
 		Node *lastParent = (Node *) malloc(sizeof(Node));
 
 		lastParent->colIndex = selectedColumns[bestFeatureIndex];
@@ -343,7 +308,6 @@ Node * get_split(
 		return lastParent;
 	}
 
-	// printf("Else\n");
 	// If we are not at max depth and we are not a leaf:
 
 	Node *current = (Node *) malloc(sizeof(Node));
@@ -560,11 +524,9 @@ int read_csv(
 			token = strtok(line, ",");
 			while (token != NULL && columnCount < *numFeatures){
 				sscanf(token, "%lf", &currVal);
-				// printf("%lf ", currVal);
 				(*dataset)[row * (*numFeatures) + columnCount] = currVal;
 
 				token = strtok(NULL, ",\n");
-				// printf("%d", columnCount);
 				columnCount++;
 			}
 
@@ -584,14 +546,11 @@ int read_csv(
 
 				if (strcmp(labelToken, "\0") == 0){
 					// Insert new label
-					// printf("Inicijalizujemo %s\n", token);
 					strcpy(lblMap[i].name, token);
 					currentRowIntLabel = lblMap[i].value;
-					// printf("Inicijalizujemo %s\n", token);
 					break;
 				}
 				else if (strcmp(token, labelToken) == 0){
-					// printf("Uzimamo vrednost na %d\n", i);
 					currentRowIntLabel = lblMap[i].value;
 					break;
 				}
@@ -633,8 +592,6 @@ int get_dataset_sample(
 		int columnIndex;
 
 		int randElementIndex = rand() % numRows;
-		
-		// printf("%d\n", randElementIndex);
 
 		//////////////////
 		// COPY THE ROW //
@@ -709,8 +666,6 @@ float gini_index_2(int nLeft, int *leftLabels, int nRight, int *rightLabels, int
 
 	int totalNumInstances = nLeft + nRight;
 
-	// printf("Calculating gini for %d rows\n", totalNumInstances);
-
 	float gini = 0.0;
 
 	int i, labelMarker;
@@ -747,28 +702,21 @@ float gini_index_2(int nLeft, int *leftLabels, int nRight, int *rightLabels, int
 
 	if (nLeft){
 		p = (float) leftLblCount[0] / nLeft;
-		// printf("\t\tLeft p 0: %f\n", p);
 		scoreLeft += (p * p);
 		p = (float) leftLblCount[1] / nLeft;
-		// printf("\t\tLeft p 1: %f\n", p);
 		scoreLeft += (p * p);
-		// printf("\t\tScoreLeft: %f\n", scoreLeft);
 	}
 
 	if (nRight){
 		p = (float) rightLblCount[0] / nRight;
-		// printf("\t\tRight p 0: %f\n", p);
 		scoreRight += (p * p);
 		p = (float) rightLblCount[1] / nRight;
-		// printf("\t\tRight p 1: %f\n", p);
 		scoreRight += (p * p);
-		// printf("\t\tScoreRight: %f\n", scoreRight);
 	}
 
 	gini += ((1.0 - scoreLeft) * ((float) nLeft / totalNumInstances));
 	gini += ((1.0 - scoreRight) * ((float) nRight / totalNumInstances));
 
-	// printf("\t\tGini score is %f\n", gini);
 
 	return gini;
 }
@@ -1016,6 +964,38 @@ int check_input(int argc, char *argv[]){
 
 }
 
+void log_results(float accuracy, double time, int numTrees, int numWorkers){
+
+	FILE *f;
+	char *fname = "./log/log.txt";
+
+	struct stat st = {0};
+
+	if (stat("./log/", &st) == -1) {
+	    mkdir("./log/", 0700);
+	    fflush(stdout);
+	}
+
+
+	if (access(fname, F_OK) == -1){
+		// Doesn't exist
+		f = fopen(fname, "a");
+
+		fprintf(f, "Num trees: %d\n\n", numTrees);
+
+		fprintf(f, "[Workers: %d | Accuracy: %f] Time: %f\n", numWorkers, accuracy, time);
+	}
+	else {
+		f = fopen(fname, "a");
+		
+		fprintf(f, "[Workers: %d | Accuracy: %f] Time: %f\n", numWorkers, accuracy, time);
+
+	}
+	
+	fclose(f);
+
+}
+
 
 /*
  *	Arguments:
@@ -1074,12 +1054,6 @@ int main(int argc, char *argv[]) {
 
 		// Calculate number of trees per node
 		numTreesPerWorker = numTrees / numWorkers;
-		// if (numTrees % numTreesPerWorker != 0){
-		// 	numTreesForMaster = numTrees % numWorkers;
-		// }
-		// else {
-		// 	numTreesForMaster = numTreesPerWorker;
-		// }
 
 		numTreesForMaster = numTrees - (numTreesPerWorker * (numWorkers - 1));
 
@@ -1130,6 +1104,9 @@ int main(int argc, char *argv[]) {
 	////////////////////////
 	// BROADCAST THE DATA //
 	////////////////////////
+
+	// Measure time AFTER loading the dataset:
+	clock_t begin = clock();
 
 	MPI_Bcast(
 		&numClasses,		// buffer
@@ -1222,9 +1199,6 @@ int main(int argc, char *argv[]) {
 	else {
 		treesToTrain = numTreesPerWorker;
 	}
-	// printf("[Rank %d] treesToTrain %d\n", myRank, treesToTrain);
-	// fflush(stdout);
-
 
 	// The master will have at most this many trees,
 	// if not less
@@ -1242,9 +1216,9 @@ int main(int argc, char *argv[]) {
 			maxTreeDepth, // Max depth
 			numFeaturesToSample
 		);
-		printf("\n\n>>>Rank %d trained tree #%d\n\n", myRank, treeInd);
-		print_tree(trees[treeInd], 0);
-		fflush(stdout);
+		// printf("\n\n>>>Rank %d trained tree #%d\n\n", myRank, treeInd);
+		// print_tree(trees[treeInd], 0);
+		// fflush(stdout);
 	}
 
 	/////////////////////
@@ -1262,7 +1236,6 @@ int main(int argc, char *argv[]) {
 			trees[treeInd]);
 
 		for (datapointIndex = 0; datapointIndex < numValidation; datapointIndex++){
-			// Possible Error? Maybe copy the memory location
 			localPredictionMatrix[treeInd * numValidation + datapointIndex] = 
 				preds[datapointIndex];
 		}
@@ -1277,8 +1250,6 @@ int main(int argc, char *argv[]) {
 		// Create prediction matrix (numTrees * numValidation)
 
 		int *predictionMatrix = (int *) malloc(numTrees * numValidation * sizeof(int));
-
-
 
 		// Add my predictions to the matrix
 
@@ -1322,21 +1293,19 @@ int main(int argc, char *argv[]) {
 							offset + 
 							(workerId - 1) * numTreesPerWorker * numValidation + 
 							treeInd * numValidation + datapointIndex;
-					// printf("[%d]..............WRITING TO: %d\n", workerId, currWorkerOffset);
-					// fflush(stdout);	
-					// predictionMatrix[offset + workerId * treeInd * numValidation + datapointIndex] =
+
 					predictionMatrix[currWorkerOffset] =
 						incomingPredictions[treeInd * numValidation + datapointIndex];
 
-					// if (predictionMatrix[offset + workerId * treeInd * numValidation + datapointIndex] >= numClasses){
-					// 	printf("[==============] Bad label [%d] from [%d]\n\n", incomingPredictions[treeInd * numValidation + datapointIndex], workerId);
-					// 	fflush(stdout);
-						
-					// }
 				}
 			}
 
 		}
+
+		// Get the ending time AFTER receiving all the data
+		clock_t end = clock();
+
+		double time_spent = (double) (end - begin) / CLOCKS_PER_SEC;
 
 		// Calculate accuracy
 
@@ -1349,9 +1318,10 @@ int main(int argc, char *argv[]) {
 
 		float accuracy = get_accuracy(numValidation, validationLabels, finalVotePredictions);
 
-		printf("\n\nAccuracy: %.2f\n\n", accuracy * 100);
+		printf("\n\nAccuracy: %.2f\nElapsed time: %f\n\n", accuracy * 100, time_spent);
 		fflush(stdout);
 
+		log_results(accuracy, time_spent, numTrees, numWorkers);
 
 		free(finalVotePredictions);
 		free(incomingPredictions);

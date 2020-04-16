@@ -3,3 +3,4 @@ program[B
 *.o
 sonar.mines
 build/*
+log/*
